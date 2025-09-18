@@ -9,6 +9,11 @@ use std::{
 };
 use thiserror::Error;
 
+mod alternate_content;
+mod defs;
+
+pub use alternate_content::AlternateContentStack;
+
 #[derive(Error, Debug)]
 pub enum SdkError {
   #[error("quick_xml error")]
