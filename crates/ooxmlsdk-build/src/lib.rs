@@ -1,4 +1,4 @@
-use proc_macro2::TokenStream;
+use proc_macro2::{Span, TokenStream};
 use quote::quote;
 use std::{fs, path::Path};
 use syn::{parse_str, Ident, ItemMod};
@@ -149,6 +149,29 @@ pub(crate) fn write_schemas(gen_context: &GenContext, out_dir_path: &Path) {
   let syntax_tree = syn::parse2(token_stream).unwrap();
   let formatted = prettyplease::unparse(&syntax_tree);
   let schemas_mod_path = out_common_dir_path.join("mod.rs");
+  fs::write(schemas_mod_path, formatted).unwrap();
+
+  let token_stream: TokenStream =
+    parse_str(include_str!("includes/common/alternate_content.rs")).unwrap();
+  let syntax_tree = syn::parse2(token_stream).unwrap();
+  let formatted = prettyplease::unparse(&syntax_tree);
+  let schemas_mod_path = out_common_dir_path.join("alternate_content.rs");
+  fs::write(schemas_mod_path, formatted).unwrap();
+
+  let supported_namespaces: Vec<syn::LitStr> = gen_context
+    .namespaces
+    .iter()
+    .filter(|ns| generator::context::check_office_version(&ns.version))
+    .map(|ns| syn::LitStr::new(&ns.prefix, Span::call_site()))
+    .collect();
+  let syntax_tree = syn::parse2(quote! {
+    pub const SUPPORTED_NAMESPACES: &[&str] = &[
+      #(#supported_namespaces),*
+    ];
+  })
+  .unwrap();
+  let formatted = prettyplease::unparse(&syntax_tree);
+  let schemas_mod_path = out_common_dir_path.join("defs.rs");
   fs::write(schemas_mod_path, formatted).unwrap();
 
   let token_stream: TokenStream =

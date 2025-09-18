@@ -537,7 +537,7 @@ pub fn gen_deserializers(schema: &OpenXmlSchema, gen_context: &GenContext) -> To
       loop_match_arm_list.push(
         parse2(quote! {
           quick_xml::events::Event::Start(e) => {
-            e_opt = Some(e);
+            e_opt = alternate_content_stack.on_start(e, xml_reader)?;
           }
         })
         .unwrap(),
@@ -580,6 +580,8 @@ pub fn gen_deserializers(schema: &OpenXmlSchema, gen_context: &GenContext) -> To
         #attr_match_stmt_opt
 
         if !empty_tag {
+          let mut alternate_content_stack = crate::common::AlternateContentStack::default();
+
           loop {
             #( #loop_declaration_list )*
 
@@ -589,7 +591,7 @@ pub fn gen_deserializers(schema: &OpenXmlSchema, gen_context: &GenContext) -> To
                 #prefix_type_name_literal | #type_name_literal => {
                   break;
                 }
-                _ => (),
+                _ => alternate_content_stack.on_end(e)?,
               },
               quick_xml::events::Event::Eof => Err(crate::common::SdkError::UnknownError)?,
               _ => (),
