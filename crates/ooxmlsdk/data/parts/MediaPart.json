@@ -1,0 +1,10 @@
+{
+  "Name": "MediaPart",
+  "Base": "OpenXmlPart",
+  "RelationshipType": "http://schemas.microsoft.com/office/2007/relationships/media",
+  "Target": "media",
+  "Extension": ".bin",
+  "Paths": {
+    "General": "../media"
+  }
+}
