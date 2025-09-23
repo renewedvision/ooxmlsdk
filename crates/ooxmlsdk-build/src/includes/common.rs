@@ -178,3 +178,19 @@ macro_rules! expect_event_start {
 }
 
 pub(crate) use expect_event_start;
+
+pub(crate) fn skip_element<'a, R>(reader: &mut R) -> Result<(), SdkError>
+where
+  R: XmlReader<'a>,
+{
+  let mut level = 1;
+  while level > 0 {
+    match reader.next()? {
+      quick_xml::events::Event::Start(_) => level += 1,
+      quick_xml::events::Event::End(_) => level -= 1,
+      quick_xml::events::Event::Eof => Err(SdkError::UnknownError)?,
+      _ => {}
+    }
+  }
+  Ok(())
+}
