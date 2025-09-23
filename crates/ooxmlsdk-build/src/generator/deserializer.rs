@@ -553,14 +553,28 @@ pub fn gen_deserializers(schema: &OpenXmlSchema, gen_context: &GenContext) -> To
         .unwrap(),
       );
 
+      loop_children_match_list.push(
+        parse2(if type_name_str == "ext" {
+          quote! {
+            _ => if !e_empty {
+              crate::common::skip_element(xml_reader)?;
+            }
+          }
+        } else {
+          quote! {
+          _ => Err(super::super::common::SdkError::CommonError(
+                  #class_name_str.to_string(),
+                ))?,
+          }
+        })
+        .unwrap(),
+      );
+
       loop_children_stmt_opt = Some(
         parse2(quote! {
           if let Some(e) = e_opt {
             match e.name().as_ref() {
               #( #loop_children_match_list )*
-              _ => Err(super::super::common::SdkError::CommonError(
-                #class_name_str.to_string(),
-              ))?,
             }
           }
         })
