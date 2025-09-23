@@ -901,6 +901,7 @@ fn gen_field_match_arm(attr: &OpenXmlSchemaTypeAttribute, gen_context: &GenConte
             #attr_name_ident = Some(
               attr
                 .decode_and_unescape_value(xml_reader.decoder())?
+                .replace("%", "000")
                 .parse::<#e_type>()?,
             );
           }
