@@ -3241,7 +3241,12 @@
         "Kind": "Sequence",
         "Items": [
           {
-            "Name": "xsd:string/c:f"
+            "Name": "xsd:string/c:f",
+            "Occurs": [
+              {
+                "Max": 1
+              }
+            ]
           },
           {
             "Name": "c:CT_StrData/c:strCache",
