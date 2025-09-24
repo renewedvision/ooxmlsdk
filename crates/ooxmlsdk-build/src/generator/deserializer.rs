@@ -914,11 +914,14 @@ fn gen_field_match_arm(attr: &OpenXmlSchemaTypeAttribute, gen_context: &GenConte
 
         quote! {
           #attr_name_literal => {
-            #attr_name_ident = Some(
-              attr
-                .decode_and_unescape_value(xml_reader.decoder())?
-                .parse::<#e_type>()?,
-            );
+            let e_value = attr.decode_and_unescape_value(xml_reader.decoder())?;
+            if e_value.ends_with("%") {
+              let e_float: f64 = e_value[..e_value.len() - 1].parse()?;
+              // Scale the 0..100 to 0..100000
+              #attr_name_ident = Some((e_float * 1000.0) as #e_type)
+            } else {
+              #attr_name_ident = Some(e_value.parse::<#e_type>()?);
+            }
           }
         }
       }
