@@ -833,15 +833,9 @@ fn gen_simple_child_entity_arm(first_name: &str, gen_context: &GenContext, arms:
       arms.push(
         parse2::<Arm>(quote! {
           quick_xml::events::Event::GeneralRef(t) => {
-            let entity_content = match &t.decode()?.into_owned()[..] {
-              "amp" => "&",
-              "lt" => "<",
-              "gt" => ">",
-              "apos" => "'",
-              "quot" => "\"",
-              _ => "",
-            };
-            xml_content = Some(xml_content.unwrap_or("".to_string()) + &entity_content);
+            if let Some(entity_content) = quick_xml::escape::resolve_xml_entity(t.decode()?.as_ref()) {
+              xml_content = Some(xml_content.unwrap_or("".to_string()) + entity_content);
+            }
           }
         })
         .unwrap(),
