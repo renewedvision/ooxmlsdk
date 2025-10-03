@@ -87,6 +87,11 @@
     },
     {
       "MaxOccursGreatThanOne": true,
+      "ApiName": "VideoParts",
+      "Name": "VideoPart"
+    },
+    {
+      "MaxOccursGreatThanOne": true,
       "IsDataPartReference": true,
       "ApiName": "VideoReferenceRelationships",
       "Name": "VideoReferenceRelationship"
