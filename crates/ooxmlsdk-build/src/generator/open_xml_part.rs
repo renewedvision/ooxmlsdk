@@ -280,13 +280,18 @@ pub fn gen_open_xml_parts(part: &OpenXmlPart, gen_context: &GenContext) -> Token
 
     field_declaration_list.push(
       parse2(quote! {
-        {
-          let mut zip_entry = archive.by_name(path)?;
+        match r_mode {
+          Some(crate::schemas::opc_relationships::TargetMode::External) => {
+            part_content = std::fs::read(path).unwrap_or_default();
+          }
+          _ => {
+            let mut zip_entry = archive.by_name(path)?;
 
-          part_content = Vec::with_capacity(zip_entry.size() as usize);
+            part_content = Vec::with_capacity(zip_entry.size() as usize);
 
-          zip_entry.read_to_end(&mut part_content)?;
-        }
+            zip_entry.read_to_end(&mut part_content)?;
+          },
+        };
       })
       .unwrap(),
     );
@@ -387,14 +392,18 @@ pub fn gen_open_xml_parts(part: &OpenXmlPart, gen_context: &GenContext) -> Token
       children_arm_list.push(
         parse2(quote! {
           #relationship_type_ty => {
-            let target_path = crate::common::resolve_zip_file_path(
-              &format!("{}{}", child_parent_path, relationship.target),
-            );
+            let target_path = match relationship.target_mode.as_ref() {
+              Some(crate::schemas::opc_relationships::TargetMode::External) => relationship.target.clone(),
+              _ => crate::common::resolve_zip_file_path(
+                  &format!("{}{}", child_parent_path, relationship.target),
+              ),
+            };
 
             let #child_name_ident = #child_type::new_from_archive(
               &child_parent_path,
               &target_path,
               &relationship.id,
+              relationship.target_mode.as_ref(),
               file_path_set,
               archive,
             )?;
@@ -415,14 +424,18 @@ pub fn gen_open_xml_parts(part: &OpenXmlPart, gen_context: &GenContext) -> Token
       children_arm_list.push(
         parse2(quote! {
           #relationship_type_ty => {
-            let target_path = crate::common::resolve_zip_file_path(
-              &format!("{}{}", child_parent_path, relationship.target),
-            );
+            let target_path = match relationship.target_mode.as_ref() {
+              Some(crate::schemas::opc_relationships::TargetMode::External) => relationship.target.clone(),
+              _ => crate::common::resolve_zip_file_path(
+                  &format!("{}{}", child_parent_path, relationship.target),
+              ),
+            };
 
             #child_api_name_ident = Some(std::boxed::Box::new(#child_type::new_from_archive(
               &child_parent_path,
               &target_path,
               &relationship.id,
+              relationship.target_mode.as_ref(),
               file_path_set,
               archive,
             )?));
@@ -479,6 +492,7 @@ pub fn gen_open_xml_parts(part: &OpenXmlPart, gen_context: &GenContext) -> Token
       parent_path: &str,
       path: &str,
       r_id: &str,
+      r_mode: Option<&crate::schemas::opc_relationships::TargetMode>,
       file_path_set: &std::collections::HashSet<String>,
       archive: &mut zip::ZipArchive<R>,
     ) -> Result<Self, crate::common::SdkError> {
@@ -736,7 +750,7 @@ pub fn gen_open_xml_parts(part: &OpenXmlPart, gen_context: &GenContext) -> Token
           file_path_set.insert(file_path);
         }
 
-        Self::new_from_archive("", "", "", &file_path_set, &mut archive)
+        Self::new_from_archive("", "", "", None, &file_path_set, &mut archive)
       }
     })
     .unwrap();

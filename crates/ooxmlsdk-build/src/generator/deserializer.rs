@@ -842,7 +842,7 @@ fn gen_simple_child_match_arm(first_name: &str, gen_context: &GenContext) -> Arm
 }
 
 fn gen_simple_child_entity_arm(first_name: &str, gen_context: &GenContext, arms: &mut Vec<Arm>) {
-  if gen_context.enum_type_enum_map.get(first_name).is_none() {
+  if !gen_context.enum_type_enum_map.contains_key(first_name) {
     let simple_type_str = simple_type_mapping(first_name);
 
     if simple_type_str == "StringValue" {
@@ -941,8 +941,8 @@ fn gen_field_match_arm(attr: &OpenXmlSchemaTypeAttribute, gen_context: &GenConte
         quote! {
           #attr_name_literal => {
             let e_value = attr.decode_and_unescape_value(xml_reader.decoder())?;
-            if e_value.ends_with("%") {
-              let e_float: f64 = e_value[..e_value.len() - 1].parse()?;
+            if let Some(stripped) = e_value.strip_suffix("%") {
+              let e_float: f64 = stripped.parse()?;
               // Scale the 0..100 to 0..100000
               #attr_name_ident = Some((e_float * 1000.0) as #e_type)
             } else {
