@@ -335,7 +335,7 @@ impl Relationship {
   }
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub enum TargetMode {
   #[default]
   External,
