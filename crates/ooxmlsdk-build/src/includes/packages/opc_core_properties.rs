@@ -119,113 +119,24 @@ impl CoreProperties {
     if !empty_tag {
       loop {
         match xml_reader.next()? {
-          quick_xml::events::Event::Start(e) | quick_xml::events::Event::Empty(e) => {
+          quick_xml::events::Event::Start(e) => {
+            let element_text = super::super::common::read_element_text(xml_reader, &e)?;
             match e.name().as_ref() {
-              b"cp:category" => {
-                if let quick_xml::events::Event::Text(t) = xml_reader.next()? {
-                  category = Some(t.decode()?.to_string())
-                }
-
-                xml_reader.next()?;
-              }
-              b"cp:contentStatus" => {
-                if let quick_xml::events::Event::Text(t) = xml_reader.next()? {
-                  content_status = Some(t.decode()?.to_string())
-                }
-
-                xml_reader.next()?;
-              }
-              b"dcterms:created" => {
-                if let quick_xml::events::Event::Text(t) = xml_reader.next()? {
-                  created = Some(t.decode()?.to_string())
-                }
-
-                xml_reader.next()?;
-              }
-              b"dc:creator" => {
-                if let quick_xml::events::Event::Text(t) = xml_reader.next()? {
-                  creator = Some(t.decode()?.to_string())
-                }
-
-                xml_reader.next()?;
-              }
-              b"dc:description" => {
-                if let quick_xml::events::Event::Text(t) = xml_reader.next()? {
-                  description = Some(t.decode()?.to_string())
-                }
-
-                xml_reader.next()?;
-              }
-              b"dc:identifier" => {
-                if let quick_xml::events::Event::Text(t) = xml_reader.next()? {
-                  identifier = Some(t.decode()?.to_string())
-                }
-
-                xml_reader.next()?;
-              }
-              b"cp:keywords" => {
-                if let quick_xml::events::Event::Text(t) = xml_reader.next()? {
-                  keywords = Some(t.decode()?.to_string())
-                }
-
-                xml_reader.next()?;
-              }
-              b"dc:language" => {
-                if let quick_xml::events::Event::Text(t) = xml_reader.next()? {
-                  language = Some(t.decode()?.to_string())
-                }
-
-                xml_reader.next()?;
-              }
-              b"cp:lastModifiedBy" => {
-                if let quick_xml::events::Event::Text(t) = xml_reader.next()? {
-                  last_modified_by = Some(t.decode()?.to_string())
-                }
-
-                xml_reader.next()?;
-              }
-              b"cp:lastPrinted" => {
-                if let quick_xml::events::Event::Text(t) = xml_reader.next()? {
-                  last_printed = Some(t.decode()?.to_string())
-                }
-
-                xml_reader.next()?;
-              }
-              b"dcterms:modified" => {
-                if let quick_xml::events::Event::Text(t) = xml_reader.next()? {
-                  modified = Some(t.decode()?.to_string())
-                }
-
-                xml_reader.next()?;
-              }
-              b"cp:revision" => {
-                if let quick_xml::events::Event::Text(t) = xml_reader.next()? {
-                  revision = Some(t.decode()?.to_string())
-                }
-
-                xml_reader.next()?;
-              }
-              b"dc:subject" => {
-                if let quick_xml::events::Event::Text(t) = xml_reader.next()? {
-                  subject = Some(t.decode()?.to_string())
-                }
-
-                xml_reader.next()?;
-              }
-              b"dc:title" => {
-                if let quick_xml::events::Event::Text(t) = xml_reader.next()? {
-                  title = Some(t.decode()?.to_string())
-                }
-
-                xml_reader.next()?;
-              }
-              b"cp:version" => {
-                if let quick_xml::events::Event::Text(t) = xml_reader.next()? {
-                  version = Some(t.decode()?.to_string())
-                }
-
-                xml_reader.next()?;
-              }
+              b"cp:category" => category = element_text,
+              b"cp:contentStatus" => content_status = element_text,
+              b"dcterms:created" => created = element_text,
+              b"dc:creator" => creator = element_text,
+              b"dc:description" => description = element_text,
+              b"dc:identifier" => identifier = element_text,
+              b"cp:keywords" => keywords = element_text,
+              b"dc:language" => language = element_text,
+              b"cp:lastModifiedBy" => last_modified_by = element_text,
+              b"cp:lastPrinted" => last_printed = element_text,
+              b"dcterms:modified" => modified = element_text,
+              b"cp:revision" => revision = element_text,
+              b"dc:subject" => subject = element_text,
+              b"dc:title" => title = element_text,
+              b"cp:version" => version = element_text,
               _ => Err(super::super::common::SdkError::CommonError(
                 "coreProperties".to_string(),
               ))?,
