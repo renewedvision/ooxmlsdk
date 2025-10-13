@@ -194,3 +194,28 @@ where
   }
   Ok(())
 }
+
+pub(crate) fn read_element_text<'a, R>(
+  reader: &mut R,
+  start: &quick_xml::events::BytesStart<'a>,
+) -> Result<Option<String>, SdkError>
+where
+  R: XmlReader<'a>,
+{
+  let mut text = None;
+
+  loop {
+    match reader.next()? {
+      quick_xml::events::Event::Text(t) => {
+        text = Some(text.unwrap_or_default() + t.decode()?.as_ref());
+      }
+      quick_xml::events::Event::GeneralRef(t) => {
+        if let Some(entity) = quick_xml::escape::resolve_xml_entity(t.decode()?.as_ref()) {
+          text = Some(text.unwrap_or_default() + entity);
+        }
+      }
+      quick_xml::events::Event::End(e) if e.name() == start.name() => return Ok(text),
+      _ => Err(SdkError::UnknownError)?,
+    }
+  }
+}
