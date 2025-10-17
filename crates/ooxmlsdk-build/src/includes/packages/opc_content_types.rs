@@ -20,7 +20,7 @@ impl std::str::FromStr for Types {
   fn from_str(s: &str) -> Result<Self, Self::Err> {
     let mut xml_reader = super::super::common::from_str_inner(s)?;
 
-    Self::deserialize_inner(&mut xml_reader, None)
+    Self::deserialize_inner(&mut xml_reader, None, std::default::Default::default())
   }
 }
 
@@ -30,18 +30,18 @@ impl Types {
   ) -> Result<Self, super::super::common::SdkError> {
     let mut xml_reader = super::super::common::from_reader_inner(reader)?;
 
-    Self::deserialize_inner(&mut xml_reader, None)
+    Self::deserialize_inner(&mut xml_reader, None, std::default::Default::default())
   }
 
   pub(crate) fn deserialize_inner<'de, R: super::super::common::XmlReader<'de>>(
     xml_reader: &mut R,
     xml_event: Option<(quick_xml::events::BytesStart<'de>, bool)>,
+    mut xmlns_map: std::collections::HashMap<String, String>,
   ) -> Result<Self, super::super::common::SdkError> {
     let (e, empty_tag) =
-      super::super::common::expect_event_start!(xml_reader, xml_event, b"w:Types", b"Types");
+      super::super::common::expect_event_start!(xml_reader, xml_event, b"Types", xmlns_map);
 
     let mut xmlns = None;
-    let mut xmlns_map = std::collections::HashMap::<String, String>::new();
     let mut mc_ignorable = None;
 
     let mut children = vec![];
@@ -64,16 +64,7 @@ impl Types {
               .into_owned(),
           );
         }
-        key => {
-          if key.starts_with(b"xmlns:") {
-            xmlns_map.insert(
-              String::from_utf8_lossy(&key[6..]).to_string(),
-              attr
-                .decode_and_unescape_value(xml_reader.decoder())?
-                .into_owned(),
-            );
-          }
-        }
+        _ => (),
       }
     }
 
@@ -84,32 +75,37 @@ impl Types {
 
         match xml_reader.next()? {
           quick_xml::events::Event::Start(e) => {
+            super::super::common::update_namespace_map(xml_reader, &e, &mut xmlns_map)?;
             e_opt = Some(e);
           }
           quick_xml::events::Event::Empty(e) => {
             e_empty = true;
             e_opt = Some(e);
           }
-          quick_xml::events::Event::End(e) => match e.name().as_ref() {
-            b"w:Types" | b"Types" => {
+          quick_xml::events::Event::End(e) => {
+            if e.local_name().as_ref() == b"Types" {
               break;
             }
-            _ => (),
-          },
-          quick_xml::events::Event::Eof => Err(super::super::common::SdkError::UnknownError)?,
+          }
+          quick_xml::events::Event::Eof => Err(super::super::common::SdkError::CommonError(
+            "Unexpected end of file".into(),
+          ))?,
           _ => (),
         }
 
         if let Some(e) = e_opt {
-          match e.name().as_ref() {
-            b"w:Default" | b"Default" => {
+          match (
+            e.local_name().as_ref(),
+            super::super::common::get_element_namespace(&e, &xmlns_map)?,
+          ) {
+            (b"Default", "http://schemas.openxmlformats.org/package/2006/content-types") => {
               children.push(TypesChildChoice::Default(std::boxed::Box::new(
-                Default::deserialize_inner(xml_reader, Some((e, e_empty)))?,
+                Default::deserialize_inner(xml_reader, Some((e, e_empty)), xmlns_map.clone())?,
               )));
             }
-            b"w:Override" | b"Override" => {
+            (b"Override", "http://schemas.openxmlformats.org/package/2006/content-types") => {
               children.push(TypesChildChoice::Override(std::boxed::Box::new(
-                Override::deserialize_inner(xml_reader, Some((e, e_empty)))?,
+                Override::deserialize_inner(xml_reader, Some((e, e_empty)), xmlns_map.clone())?,
               )));
             }
             _ => Err(super::super::common::SdkError::CommonError(
@@ -216,7 +212,7 @@ impl std::str::FromStr for Default {
   fn from_str(s: &str) -> Result<Self, Self::Err> {
     let mut xml_reader = super::super::common::from_str_inner(s)?;
 
-    Self::deserialize_inner(&mut xml_reader, None)
+    Self::deserialize_inner(&mut xml_reader, None, std::default::Default::default())
   }
 }
 
@@ -226,15 +222,16 @@ impl Default {
   ) -> Result<Self, super::super::common::SdkError> {
     let mut xml_reader = super::super::common::from_reader_inner(reader)?;
 
-    Self::deserialize_inner(&mut xml_reader, None)
+    Self::deserialize_inner(&mut xml_reader, None, std::default::Default::default())
   }
 
   pub fn deserialize_inner<'de, R: super::super::common::XmlReader<'de>>(
     xml_reader: &mut R,
     xml_event: Option<(quick_xml::events::BytesStart<'de>, bool)>,
+    mut xmlns_map: std::collections::HashMap<String, String>,
   ) -> Result<Self, super::super::common::SdkError> {
     let (e, _) =
-      super::super::common::expect_event_start!(xml_reader, xml_event, b"w:Default", b"Default");
+      super::super::common::expect_event_start!(xml_reader, xml_event, b"Default", xmlns_map);
 
     let mut extension = None;
     let mut content_type = None;
@@ -326,7 +323,7 @@ impl std::str::FromStr for Override {
   fn from_str(s: &str) -> Result<Self, Self::Err> {
     let mut xml_reader = super::super::common::from_str_inner(s)?;
 
-    Self::deserialize_inner(&mut xml_reader, None)
+    Self::deserialize_inner(&mut xml_reader, None, std::default::Default::default())
   }
 }
 
@@ -336,15 +333,16 @@ impl Override {
   ) -> Result<Self, super::super::common::SdkError> {
     let mut xml_reader = super::super::common::from_reader_inner(reader)?;
 
-    Self::deserialize_inner(&mut xml_reader, None)
+    Self::deserialize_inner(&mut xml_reader, None, std::default::Default::default())
   }
 
   pub(crate) fn deserialize_inner<'de, R: super::super::common::XmlReader<'de>>(
     xml_reader: &mut R,
     xml_event: Option<(quick_xml::events::BytesStart<'de>, bool)>,
+    mut xmlns_map: std::collections::HashMap<String, String>,
   ) -> Result<Self, super::super::common::SdkError> {
     let (e, _) =
-      super::super::common::expect_event_start!(xml_reader, xml_event, b"w:Override", b"Override");
+      super::super::common::expect_event_start!(xml_reader, xml_event, b"Override", xmlns_map);
 
     let mut content_type = None;
     let mut part_name = None;

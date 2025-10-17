@@ -51,7 +51,7 @@ pub fn gen_open_xml_schemas(schema: &OpenXmlSchema, gen_context: &GenContext) ->
     }
 
     token_stream_list.push(quote! {
-      #[derive(Clone, Debug, Default)]
+      #[derive(Clone, Debug, Default, PartialEq)]
       pub enum #e_enum_name_ident {
         #( #variants, )*
       }
