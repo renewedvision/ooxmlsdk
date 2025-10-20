@@ -1,9 +1,11 @@
 use quick_xml::{
   encoding::EncodingError,
   events::{attributes::AttrError, Event},
+  name::PrefixDeclaration,
   Decoder, Reader,
 };
 use std::{
+  collections::HashMap,
   io::BufRead,
   num::{ParseFloatError, ParseIntError},
 };
@@ -16,29 +18,27 @@ pub use alternate_content::AlternateContentStack;
 
 #[derive(Error, Debug)]
 pub enum SdkError {
-  #[error("quick_xml error")]
+  #[error("quick_xml error: {0:?}")]
   QuickXmlError(#[from] quick_xml::Error),
-  #[error("quick_xml encoding error")]
+  #[error("quick_xml encoding error: {0:?}")]
   QuickEncodingError(#[from] EncodingError),
-  #[error("quick_xml attr error")]
+  #[error("quick_xml attr error: {0:?}")]
   AttrError(#[from] AttrError),
-  #[error("ParseIntError")]
+  #[error("ParseIntError: {0:?}")]
   ParseIntError(#[from] ParseIntError),
-  #[error("ParseFloatError")]
+  #[error("ParseFloatError: {0:?}")]
   ParseFloatError(#[from] ParseFloatError),
-  #[error("StdFmtError")]
+  #[error("StdFmtError: {0:?}")]
   StdFmtError(#[from] std::fmt::Error),
-  #[error("StdIoError")]
+  #[error("StdIoError: {0:?}")]
   StdIoError(#[from] std::io::Error),
   #[cfg(feature = "parts")]
-  #[error("ZipError")]
+  #[error("ZipError: {0:?}")]
   ZipError(#[from] zip::result::ZipError),
   #[error("mismatch error (expected {expected:?}, found {found:?})")]
   MismatchError { expected: String, found: String },
   #[error("`{0}` common error")]
   CommonError(String),
-  #[error("unknown error")]
-  UnknownError,
 }
 
 pub trait XmlReader<'de> {
@@ -147,7 +147,7 @@ pub fn parse_bool_bytes(b: &[u8]) -> Result<bool, SdkError> {
 }
 
 macro_rules! expect_event_start {
-  ($xml_reader:expr, $xml_event:expr, $tag_prefix:expr, $tag:expr) => {{
+  ($xml_reader:expr, $xml_event:expr, $tag:expr, $xmlns_map:expr) => {{
     if let Some((e, empty_tag)) = $xml_event {
       (e, empty_tag)
     } else {
@@ -155,15 +155,15 @@ macro_rules! expect_event_start {
         match $xml_reader.next()? {
           quick_xml::events::Event::Start(b) => break (b, false),
           quick_xml::events::Event::Empty(b) => break (b, true),
-          quick_xml::events::Event::Eof => {
-            return Err(super::super::common::SdkError::UnknownError)
-          }
+          quick_xml::events::Event::Eof => Err(super::super::common::SdkError::CommonError(
+            "Unexpected end of file".into(),
+          ))?,
           _ => continue,
         }
       };
 
-      match e.name().as_ref() {
-        $tag_prefix | $tag => (),
+      match e.local_name().as_ref() {
+        $tag => (),
         _ => {
           Err(super::super::common::SdkError::MismatchError {
             expected: String::from_utf8_lossy($tag).to_string(),
@@ -171,6 +171,8 @@ macro_rules! expect_event_start {
           })?;
         }
       }
+
+      super::super::common::update_namespace_map($xml_reader, &e, &mut $xmlns_map)?;
 
       (e, empty_tag)
     }
@@ -188,7 +190,7 @@ where
     match reader.next()? {
       quick_xml::events::Event::Start(_) => level += 1,
       quick_xml::events::Event::End(_) => level -= 1,
-      quick_xml::events::Event::Eof => Err(SdkError::UnknownError)?,
+      quick_xml::events::Event::Eof => Err(SdkError::CommonError("Unexpected end of file".into()))?,
       _ => {}
     }
   }
@@ -215,7 +217,55 @@ where
         }
       }
       quick_xml::events::Event::End(e) if e.name() == start.name() => return Ok(text),
-      _ => Err(SdkError::UnknownError)?,
+      quick_xml::events::Event::Eof => Err(SdkError::CommonError("Unexpected end of file".into()))?,
+      event => Err(SdkError::CommonError(format!(
+        "Unexpected event: {event:?}"
+      )))?,
     }
+  }
+}
+
+pub(crate) fn update_namespace_map<'a, R>(
+  xml_reader: &R,
+  e: &quick_xml::events::BytesStart<'a>,
+  xmlns_map: &mut HashMap<String, String>,
+) -> Result<(), SdkError>
+where
+  R: XmlReader<'a>,
+{
+  for attr in e.attributes().with_checks(false) {
+    let attr = attr?;
+    if let Some(namespace) = attr.key.as_namespace_binding() {
+      let value = attr
+        .decode_and_unescape_value(xml_reader.decoder())?
+        .to_string();
+      let key = match namespace {
+        PrefixDeclaration::Named(prefix) => String::from_utf8_lossy(prefix),
+        PrefixDeclaration::Default => "".into(),
+      };
+      xmlns_map.insert(key.to_string(), value);
+    }
+  }
+  Ok(())
+}
+
+pub(crate) fn get_element_namespace<'a, 'b>(
+  e: &quick_xml::events::BytesStart<'a>,
+  xmlns_map: &'b HashMap<String, String>,
+) -> Result<&'b str, SdkError> {
+  let prefix = e
+    .name()
+    .prefix()
+    .map(|prefix| String::from_utf8_lossy(prefix.as_ref()).to_string());
+
+  if let Some(ns) = prefix {
+    Ok(
+      xmlns_map
+        .get(&ns)
+        .ok_or(SdkError::CommonError("Unknown prefix: {ns}".into()))?
+        .as_str(),
+    )
+  } else {
+    Ok(xmlns_map.get("").map(|ns| ns.as_str()).unwrap_or(""))
   }
 }

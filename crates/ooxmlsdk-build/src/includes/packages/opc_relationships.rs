@@ -12,7 +12,7 @@ impl std::str::FromStr for Relationships {
   fn from_str(s: &str) -> Result<Self, Self::Err> {
     let mut xml_reader = super::super::common::from_str_inner(s)?;
 
-    Self::deserialize_inner(&mut xml_reader, None)
+    Self::deserialize_inner(&mut xml_reader, None, Default::default())
   }
 }
 
@@ -22,23 +22,18 @@ impl Relationships {
   ) -> Result<Self, super::super::common::SdkError> {
     let mut xml_reader = super::super::common::from_reader_inner(reader)?;
 
-    Self::deserialize_inner(&mut xml_reader, None)
+    Self::deserialize_inner(&mut xml_reader, None, Default::default())
   }
 
   pub fn deserialize_inner<'de, R: super::super::common::XmlReader<'de>>(
     xml_reader: &mut R,
     xml_event: Option<(quick_xml::events::BytesStart<'de>, bool)>,
+    mut xmlns_map: std::collections::HashMap<String, String>,
   ) -> Result<Self, super::super::common::SdkError> {
-    let (e, empty_tag) = super::super::common::expect_event_start!(
-      xml_reader,
-      xml_event,
-      b"w:Relationships",
-      b"Relationships"
-    );
+    let (e, empty_tag) =
+      super::super::common::expect_event_start!(xml_reader, xml_event, b"Relationships", xmlns_map);
 
     let mut xmlns = None;
-
-    let mut xmlns_map = std::collections::HashMap::<String, String>::new();
 
     let mut mc_ignorable = None;
 
@@ -61,16 +56,7 @@ impl Relationships {
               .to_string(),
           );
         }
-        key => {
-          if key.starts_with(b"xmlns:") {
-            xmlns_map.insert(
-              String::from_utf8_lossy(&key[6..]).to_string(),
-              attr
-                .decode_and_unescape_value(xml_reader.decoder())?
-                .to_string(),
-            );
-          }
-        }
+        _ => (),
       }
     }
 
@@ -87,27 +73,33 @@ impl Relationships {
             e_empty = true;
             e_opt = Some(e);
           }
-          quick_xml::events::Event::End(e) => match e.name().as_ref() {
-            b"w:Relationships" | b"Relationships" => {
+          quick_xml::events::Event::End(e) => {
+            if e.local_name().as_ref() == b"Relationships" {
               break;
             }
-            _ => (),
-          },
-          quick_xml::events::Event::Eof => Err(super::super::common::SdkError::UnknownError)?,
+          }
+          quick_xml::events::Event::Eof => Err(super::super::common::SdkError::CommonError(
+            "Unexpected end of file".into(),
+          ))?,
           _ => (),
         }
 
         if let Some(e) = e_opt {
-          match e.name().as_ref() {
-            b"w:Relationship" | b"Relationship" => {
+          super::super::common::update_namespace_map(xml_reader, &e, &mut xmlns_map)?;
+          match (
+            e.local_name().as_ref(),
+            super::super::common::get_element_namespace(&e, &xmlns_map)?,
+          ) {
+            (b"Relationship", "http://schemas.openxmlformats.org/package/2006/relationships") => {
               relationship.push(Relationship::deserialize_inner(
                 xml_reader,
                 Some((e, e_empty)),
+                xmlns_map.clone(),
               )?);
             }
 
             _ => Err(super::super::common::SdkError::CommonError(
-              "Types".to_string(),
+              "Relationship".to_string(),
             ))?,
           }
         }
@@ -203,7 +195,7 @@ impl Relationship {
   pub fn from_str(s: &str) -> Result<Self, super::super::common::SdkError> {
     let mut xml_reader = super::super::common::from_str_inner(s)?;
 
-    Self::deserialize_inner(&mut xml_reader, None)
+    Self::deserialize_inner(&mut xml_reader, None, Default::default())
   }
 
   pub fn from_reader<R: std::io::BufRead>(
@@ -211,19 +203,16 @@ impl Relationship {
   ) -> Result<Self, super::super::common::SdkError> {
     let mut xml_reader = super::super::common::from_reader_inner(reader)?;
 
-    Self::deserialize_inner(&mut xml_reader, None)
+    Self::deserialize_inner(&mut xml_reader, None, Default::default())
   }
 
   pub fn deserialize_inner<'de, R: super::super::common::XmlReader<'de>>(
     xml_reader: &mut R,
     xml_event: Option<(quick_xml::events::BytesStart<'de>, bool)>,
+    mut xmlns_map: std::collections::HashMap<String, String>,
   ) -> Result<Self, super::super::common::SdkError> {
-    let (e, _) = super::super::common::expect_event_start!(
-      xml_reader,
-      xml_event,
-      b"w:Relationship",
-      b"Relationship"
-    );
+    let (e, _) =
+      super::super::common::expect_event_start!(xml_reader, xml_event, b"Relationship", xmlns_map);
 
     let mut target_mode = None;
 

@@ -26,7 +26,7 @@ impl std::str::FromStr for CoreProperties {
   fn from_str(s: &str) -> Result<Self, Self::Err> {
     let mut xml_reader = super::super::common::from_str_inner(s)?;
 
-    Self::deserialize_inner(&mut xml_reader, None)
+    Self::deserialize_inner(&mut xml_reader, None, Default::default())
   }
 }
 
@@ -36,23 +36,22 @@ impl CoreProperties {
   ) -> Result<Self, super::super::common::SdkError> {
     let mut xml_reader = super::super::common::from_reader_inner(reader)?;
 
-    Self::deserialize_inner(&mut xml_reader, None)
+    Self::deserialize_inner(&mut xml_reader, None, Default::default())
   }
 
   pub fn deserialize_inner<'de, R: super::super::common::XmlReader<'de>>(
     xml_reader: &mut R,
     xml_event: Option<(quick_xml::events::BytesStart<'de>, bool)>,
+    mut xmlns_map: std::collections::HashMap<String, String>,
   ) -> Result<Self, super::super::common::SdkError> {
     let (e, empty_tag) = super::super::common::expect_event_start!(
       xml_reader,
       xml_event,
-      b"cp:coreProperties",
-      b"coreProperties"
+      b"coreProperties",
+      xmlns_map
     );
 
     let mut xmlns = None;
-
-    let mut xmlns_map = std::collections::HashMap::<String, String>::new();
 
     let mut mc_ignorable = None;
 
@@ -103,16 +102,7 @@ impl CoreProperties {
               .to_string(),
           );
         }
-        key => {
-          if key.starts_with(b"xmlns:") {
-            xmlns_map.insert(
-              String::from_utf8_lossy(&key[6..]).to_string(),
-              attr
-                .decode_and_unescape_value(xml_reader.decoder())?
-                .to_string(),
-            );
-          }
-        }
+        _ => (),
       }
     }
 
@@ -121,34 +111,42 @@ impl CoreProperties {
         match xml_reader.next()? {
           quick_xml::events::Event::Start(e) => {
             let element_text = super::super::common::read_element_text(xml_reader, &e)?;
-            match e.name().as_ref() {
-              b"cp:category" => category = element_text,
-              b"cp:contentStatus" => content_status = element_text,
-              b"dcterms:created" => created = element_text,
-              b"dc:creator" => creator = element_text,
-              b"dc:description" => description = element_text,
-              b"dc:identifier" => identifier = element_text,
-              b"cp:keywords" => keywords = element_text,
-              b"dc:language" => language = element_text,
-              b"cp:lastModifiedBy" => last_modified_by = element_text,
-              b"cp:lastPrinted" => last_printed = element_text,
-              b"dcterms:modified" => modified = element_text,
-              b"cp:revision" => revision = element_text,
-              b"dc:subject" => subject = element_text,
-              b"dc:title" => title = element_text,
-              b"cp:version" => version = element_text,
+            const CP: &str =
+              "http://schemas.openxmlformats.org/package/2006/metadata/core-properties";
+            const DCTERMS: &str = "http://purl.org/dc/terms/";
+            const DC: &str = "http://purl.org/dc/elements/1.1/";
+            match (
+              e.local_name().as_ref(),
+              super::super::common::get_element_namespace(&e, &xmlns_map)?,
+            ) {
+              (b"category", CP) => category = element_text,
+              (b"contentStatus", CP) => content_status = element_text,
+              (b"created", DCTERMS) => created = element_text,
+              (b"creator", DC) => creator = element_text,
+              (b"description", DC) => description = element_text,
+              (b"identifier", DC) => identifier = element_text,
+              (b"keywords", CP) => keywords = element_text,
+              (b"language", DC) => language = element_text,
+              (b"lastModifiedBy", CP) => last_modified_by = element_text,
+              (b"lastPrinted", CP) => last_printed = element_text,
+              (b"modified", DCTERMS) => modified = element_text,
+              (b"revision", CP) => revision = element_text,
+              (b"subject", DC) => subject = element_text,
+              (b"title", DC) => title = element_text,
+              (b"version", CP) => version = element_text,
               _ => Err(super::super::common::SdkError::CommonError(
                 "coreProperties".to_string(),
               ))?,
             }
           }
-          quick_xml::events::Event::End(e) => match e.name().as_ref() {
-            b"cp:coreProperties" | b"coreProperties" => {
+          quick_xml::events::Event::End(e) => {
+            if e.local_name().as_ref() == b"coreProperties" {
               break;
             }
-            _ => (),
-          },
-          quick_xml::events::Event::Eof => Err(super::super::common::SdkError::UnknownError)?,
+          }
+          quick_xml::events::Event::Eof => Err(super::super::common::SdkError::CommonError(
+            "Unexpected end of file".into(),
+          ))?,
           _ => (),
         }
       }

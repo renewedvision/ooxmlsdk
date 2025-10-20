@@ -1,4 +1,4 @@
-use super::{defs, SdkError, XmlReader};
+use super::{defs, get_element_namespace, update_namespace_map, SdkError, XmlReader};
 
 #[derive(Default)]
 pub struct AlternateContentStack {
@@ -13,17 +13,22 @@ impl AlternateContentStack {
     &mut self,
     e: quick_xml::events::BytesStart<'a>,
     xml_reader: &mut R,
+    xmlns_map: &mut std::collections::HashMap<String, String>,
   ) -> Result<Option<quick_xml::events::BytesStart<'a>>, SdkError>
   where
     R: XmlReader<'a>,
   {
-    match e.local_name().as_ref() {
-      b"AlternateContent" => {
+    update_namespace_map(xml_reader, &e, xmlns_map)?;
+    match (
+      e.local_name().as_ref(),
+      get_element_namespace(&e, xmlns_map)?,
+    ) {
+      (b"AlternateContent", "http://schemas.openxmlformats.org/markup-compatibility/2006") => {
         self.stack.push(false);
         Ok(None)
       }
-      b"Choice" => {
-        let mut skip = *self.stack.last().ok_or(SdkError::UnknownError)?;
+      (b"Choice", "http://schemas.openxmlformats.org/markup-compatibility/2006") => {
+        let mut skip = *wrap_error(self.stack.last())?;
         // If we are not skipping choices, see if we should skip this choice
         if !skip {
           for attr in e.attributes().with_checks(false) {
@@ -41,8 +46,8 @@ impl AlternateContentStack {
         }
         Ok(None)
       }
-      b"Fallback" => {
-        let skip = *self.stack.last().ok_or(SdkError::UnknownError)?;
+      (b"Fallback", "http://schemas.openxmlformats.org/markup-compatibility/2006") => {
+        let skip = *wrap_error(self.stack.last())?;
         if skip {
           super::skip_element(xml_reader)?;
         }
@@ -56,15 +61,21 @@ impl AlternateContentStack {
   pub fn on_end<'a>(&mut self, e: quick_xml::events::BytesEnd<'a>) -> Result<(), SdkError> {
     match e.local_name().as_ref() {
       b"AlternateContent" => {
-        self.stack.pop().ok_or(SdkError::UnknownError)?;
+        wrap_error(self.stack.pop())?;
       }
       // We'll only hit this if we don't skip the choice, so we want to skip all choices after this
       b"Choice" | b"Fallback" => {
-        let last = self.stack.last_mut().ok_or(SdkError::UnknownError)?;
+        let last = wrap_error(self.stack.last_mut())?;
         *last = true;
       }
       _ => (),
     }
     Ok(())
   }
+}
+
+fn wrap_error<T>(opt: Option<T>) -> Result<T, SdkError> {
+  opt.ok_or(SdkError::CommonError(
+    "Error parsing AlternateContent".into(),
+  ))
 }

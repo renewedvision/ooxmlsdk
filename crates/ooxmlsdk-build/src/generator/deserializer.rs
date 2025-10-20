@@ -115,8 +115,6 @@ pub fn gen_deserializers(schema: &OpenXmlSchema, gen_context: &GenContext) -> To
     let type_name_str = &prefix_type_name_str
       [prefix_type_name_str.find(':').unwrap() + 1..prefix_type_name_str.len()];
 
-    let prefix_type_name_literal: LitByteStr =
-      parse_str(&format!("b\"{prefix_type_name_str}\"")).unwrap();
     let type_name_literal: LitByteStr = parse_str(&format!("b\"{type_name_str}\"")).unwrap();
 
     let mut field_declaration_list: Vec<Stmt> = vec![];
@@ -176,13 +174,6 @@ pub fn gen_deserializers(schema: &OpenXmlSchema, gen_context: &GenContext) -> To
         field_declaration_list.push(
           parse2(quote! {
             let mut xmlns = None;
-          })
-          .unwrap(),
-        );
-
-        field_declaration_list.push(
-          parse2(quote! {
-            let mut xmlns_map = std::collections::HashMap::<String, String>::new();
           })
           .unwrap(),
         );
@@ -459,8 +450,9 @@ pub fn gen_deserializers(schema: &OpenXmlSchema, gen_context: &GenContext) -> To
 
     let mut expect_event_start_stmt: Stmt = parse2(quote! {
       let (e, empty_tag) =
-        crate::common::expect_event_start!(xml_reader, xml_event, #prefix_type_name_literal, #type_name_literal);
-    }).unwrap();
+        crate::common::expect_event_start!(xml_reader, xml_event, #type_name_literal, xmlns_map);
+    })
+    .unwrap();
 
     let attr_match_stmt_opt: Option<Stmt> = if (t.base_class == "OpenXmlCompositeElement"
       || t.base_class == "CustomXmlElement"
@@ -484,14 +476,7 @@ pub fn gen_deserializers(schema: &OpenXmlSchema, gen_context: &GenContext) -> To
               b"mc:Ignorable" => {
                 mc_ignorable = Some(attr.decode_and_unescape_value(xml_reader.decoder())?.into_owned());
               }
-              key => {
-                if key.starts_with(b"xmlns:") {
-                  xmlns_map.insert(
-                    String::from_utf8_lossy(&key[6..]).to_string(),
-                    attr.decode_and_unescape_value(xml_reader.decoder())?.into_owned(),
-                  );
-                }
-              }
+              _ => (),
             }
           }
         })
@@ -515,8 +500,9 @@ pub fn gen_deserializers(schema: &OpenXmlSchema, gen_context: &GenContext) -> To
     } else {
       expect_event_start_stmt = parse2(quote! {
         let (_, empty_tag) =
-          crate::common::expect_event_start!(xml_reader, xml_event, #prefix_type_name_literal, #type_name_literal);
-      }).unwrap();
+          crate::common::expect_event_start!(xml_reader, xml_event, #type_name_literal, xmlns_map);
+      })
+      .unwrap();
 
       None
     };
@@ -539,7 +525,7 @@ pub fn gen_deserializers(schema: &OpenXmlSchema, gen_context: &GenContext) -> To
       loop_match_arm_list.push(
         parse2(quote! {
           quick_xml::events::Event::Start(e) => {
-            e_opt = alternate_content_stack.on_start(e, xml_reader)?;
+            e_opt = alternate_content_stack.on_start(e, xml_reader, &mut xmlns_map)?;
           }
         })
         .unwrap(),
@@ -575,7 +561,8 @@ pub fn gen_deserializers(schema: &OpenXmlSchema, gen_context: &GenContext) -> To
       loop_children_stmt_opt = Some(
         parse2(quote! {
           if let Some(e) = e_opt {
-            match e.name().as_ref() {
+            crate::common::update_namespace_map(xml_reader, &e, &mut xmlns_map)?;
+            match (e.local_name().as_ref(), crate::common::get_element_namespace(&e, &xmlns_map)?) {
               #( #loop_children_match_list )*
             }
           }
@@ -588,6 +575,7 @@ pub fn gen_deserializers(schema: &OpenXmlSchema, gen_context: &GenContext) -> To
       pub(crate) fn deserialize_inner<'de, R: crate::common::XmlReader<'de>>(
         xml_reader: &mut R,
         xml_event: Option<(quick_xml::events::BytesStart<'de>, bool)>,
+        mut xmlns_map: std::collections::HashMap<String, String>,
       ) -> Result<Self, crate::common::SdkError> {
         #expect_event_start_stmt
 
@@ -603,13 +591,13 @@ pub fn gen_deserializers(schema: &OpenXmlSchema, gen_context: &GenContext) -> To
 
             match xml_reader.next()? {
               #( #loop_match_arm_list )*
-              quick_xml::events::Event::End(e) => match e.name().as_ref() {
-                #prefix_type_name_literal | #type_name_literal => {
+              quick_xml::events::Event::End(e) => match e.local_name().as_ref() {
+                #type_name_literal => {
                   break;
                 }
                 _ => alternate_content_stack.on_end(e)?,
               },
-              quick_xml::events::Event::Eof => Err(crate::common::SdkError::UnknownError)?,
+              quick_xml::events::Event::Eof => Err(crate::common::SdkError::CommonError("Unexpected end of file".into()))?,
               _ => (),
             }
 
@@ -651,7 +639,7 @@ fn gen_from_str_impl(struct_type: &Type) -> ItemImpl {
       fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut xml_reader = crate::common::from_str_inner(s)?;
 
-        Self::deserialize_inner(&mut xml_reader, None)
+        Self::deserialize_inner(&mut xml_reader, None, std::default::Default::default())
       }
     }
   };
@@ -666,7 +654,7 @@ fn gen_from_reader_fn() -> ItemFn {
     ) -> Result<Self, crate::common::SdkError> {
       let mut xml_reader = crate::common::from_reader_inner(reader)?;
 
-      Self::deserialize_inner(&mut xml_reader, None)
+      Self::deserialize_inner(&mut xml_reader, None, std::default::Default::default())
     }
   };
 
@@ -691,8 +679,6 @@ fn gen_one_sequence_match_arm(
     parse_str(&escape_snake_case(child.property_name.to_snake_case())).unwrap()
   };
 
-  let child_last_name_literal: LitByteStr = parse_str(&format!("b\"{child_last_name}\"")).unwrap();
-
   let child_suffix_last_name_literal: LitByteStr =
     parse_str(&format!("b\"{child_suffix_last_name}\"")).unwrap();
 
@@ -703,21 +689,25 @@ fn gen_one_sequence_match_arm(
   ))
   .unwrap();
 
+  let prefix = &child_last_name[0..child_last_name.find(':').unwrap()];
+  let namespace = &gen_context.prefix_namespace_map.get(prefix).unwrap().uri;
+  let namespace_literal: syn::LitStr = parse_str(&format!("\"{namespace}\"")).unwrap();
+
   if loop_children_suffix_match_set.insert(child_suffix_last_name.to_string()) {
     if p.occurs.is_empty() || (p.occurs[0].min == 0 && p.occurs[0].max == 1) {
       parse2(quote! {
-        #child_last_name_literal | #child_suffix_last_name_literal => {
+        (#child_suffix_last_name_literal, #namespace_literal) => {
           #child_name_ident = Some(std::boxed::Box::new(
-            #child_variant_type::deserialize_inner(xml_reader, Some((e, e_empty)))?,
+            #child_variant_type::deserialize_inner(xml_reader, Some((e, e_empty)), xmlns_map.clone())?,
           ));
         }
       })
       .unwrap()
     } else {
       parse2(quote! {
-        #child_last_name_literal | #child_suffix_last_name_literal => {
+        (#child_suffix_last_name_literal, #namespace_literal) => {
           #child_name_ident.push(
-            #child_variant_type::deserialize_inner(xml_reader, Some((e, e_empty)))?,
+            #child_variant_type::deserialize_inner(xml_reader, Some((e, e_empty)), xmlns_map.clone())?,
           );
         }
       })
@@ -725,18 +715,18 @@ fn gen_one_sequence_match_arm(
     }
   } else if p.occurs.is_empty() || (p.occurs[0].min == 0 && p.occurs[0].max == 1) {
     parse2(quote! {
-      #child_last_name_literal => {
+      (#child_suffix_last_name_literal, #namespace_literal) => {
         #child_name_ident = Some(std::boxed::Box::new(
-          #child_variant_type::deserialize_inner(xml_reader, Some((e, e_empty)))?,
+          #child_variant_type::deserialize_inner(xml_reader, Some((e, e_empty)), xmlns_map.clone())?,
         ));
       }
     })
     .unwrap()
   } else {
     parse2(quote! {
-      #child_last_name_literal => {
+      (#child_suffix_last_name_literal, #namespace_literal) => {
         #child_name_ident.push(
-          #child_variant_type::deserialize_inner(xml_reader, Some((e, e_empty)))?,
+          #child_variant_type::deserialize_inner(xml_reader, Some((e, e_empty)), xmlns_map.clone())?,
         );
       }
     })
@@ -756,8 +746,6 @@ fn gen_child_match_arm(
   let child_suffix_last_name =
     &child_last_name[child_last_name.find(':').unwrap() + 1..child_last_name.len()];
 
-  let child_last_name_literal: LitByteStr = parse_str(&format!("b\"{child_last_name}\"")).unwrap();
-
   let child_suffix_last_name_literal: LitByteStr =
     parse_str(&format!("b\"{child_suffix_last_name}\"")).unwrap();
 
@@ -770,25 +758,19 @@ fn gen_child_match_arm(
   ))
   .unwrap();
 
-  if loop_children_suffix_match_set.insert(child_suffix_last_name.to_string()) {
-    parse2(quote! {
-      #child_last_name_literal | #child_suffix_last_name_literal => {
-        children.push(#child_choice_enum_ident::#child_variant_name_ident(std::boxed::Box::new(
-          #child_variant_type::deserialize_inner(xml_reader, Some((e, e_empty)))?,
-        )));
-      }
-    })
-    .unwrap()
-  } else {
-    parse2(quote! {
-      #child_last_name_literal => {
-        children.push(#child_choice_enum_ident::#child_variant_name_ident(std::boxed::Box::new(
-          #child_variant_type::deserialize_inner(xml_reader, Some((e, e_empty)))?,
-        )));
-      }
-    })
-    .unwrap()
-  }
+  let prefix = &child_last_name[0..child_last_name.find(':').unwrap()];
+  let namespace = &gen_context.prefix_namespace_map.get(prefix).unwrap().uri;
+  let namespace_literal: syn::LitStr = parse_str(&format!("\"{namespace}\"")).unwrap();
+
+  loop_children_suffix_match_set.insert(child_suffix_last_name.to_string());
+  parse2(quote! {
+    (#child_suffix_last_name_literal, #namespace_literal) => {
+      children.push(#child_choice_enum_ident::#child_variant_name_ident(std::boxed::Box::new(
+        #child_variant_type::deserialize_inner(xml_reader, Some((e, e_empty)), xmlns_map.clone())?,
+      )));
+    }
+  })
+  .unwrap()
 }
 
 fn gen_simple_child_match_arm(first_name: &str, gen_context: &GenContext) -> Arm {
