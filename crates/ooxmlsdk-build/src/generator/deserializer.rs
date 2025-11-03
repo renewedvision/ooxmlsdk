@@ -691,7 +691,11 @@ fn gen_one_sequence_match_arm(
 
   let prefix = &child_last_name[0..child_last_name.find(':').unwrap()];
   let namespace = &gen_context.prefix_namespace_map.get(prefix).unwrap().uri;
-  let namespace_literal: syn::LitStr = parse_str(&format!("\"{namespace}\"")).unwrap();
+  let namespace_literal: syn::Expr = if child_suffix_last_name == "ext" {
+    parse_str("_").unwrap()
+  } else {
+    parse_str(&format!("\"{namespace}\"")).unwrap()
+  };
 
   if loop_children_suffix_match_set.insert(child_suffix_last_name.to_string()) {
     if p.occurs.is_empty() || (p.occurs[0].min == 0 && p.occurs[0].max == 1) {
@@ -760,7 +764,11 @@ fn gen_child_match_arm(
 
   let prefix = &child_last_name[0..child_last_name.find(':').unwrap()];
   let namespace = &gen_context.prefix_namespace_map.get(prefix).unwrap().uri;
-  let namespace_literal: syn::LitStr = parse_str(&format!("\"{namespace}\"")).unwrap();
+  let namespace_literal: syn::Expr = if child_suffix_last_name == "ext" {
+    parse_str("_").unwrap()
+  } else {
+    parse_str(&format!("\"{namespace}\"")).unwrap()
+  };
 
   loop_children_suffix_match_set.insert(child_suffix_last_name.to_string());
   parse2(quote! {
