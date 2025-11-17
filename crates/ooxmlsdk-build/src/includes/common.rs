@@ -119,6 +119,14 @@ pub fn resolve_zip_file_path(path: &str) -> String {
   stack.join("/")
 }
 
+pub fn combine_paths(parent_path: &str, child_path: &str) -> String {
+  if child_path.starts_with("/") {
+    child_path.to_string()
+  } else {
+    format!("{}{}", parent_path, child_path)
+  }
+}
+
 #[inline]
 pub(crate) fn from_reader_inner<R: BufRead>(reader: R) -> Result<IoReader<R>, SdkError> {
   let mut xml_reader = quick_xml::Reader::from_reader(reader);
