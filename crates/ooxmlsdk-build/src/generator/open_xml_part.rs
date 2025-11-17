@@ -395,7 +395,7 @@ pub fn gen_open_xml_parts(part: &OpenXmlPart, gen_context: &GenContext) -> Token
             let target_path = match relationship.target_mode.as_ref() {
               Some(crate::schemas::opc_relationships::TargetMode::External) => relationship.target.clone(),
               _ => crate::common::resolve_zip_file_path(
-                  &format!("{}{}", child_parent_path, relationship.target),
+                  &crate::common::combine_paths(&child_parent_path, &relationship.target)
               ),
             };
 
@@ -427,7 +427,7 @@ pub fn gen_open_xml_parts(part: &OpenXmlPart, gen_context: &GenContext) -> Token
             let target_path = match relationship.target_mode.as_ref() {
               Some(crate::schemas::opc_relationships::TargetMode::External) => relationship.target.clone(),
               _ => crate::common::resolve_zip_file_path(
-                  &format!("{}{}", child_parent_path, relationship.target),
+                  &crate::common::combine_paths(&child_parent_path, &relationship.target)
               ),
             };
 
