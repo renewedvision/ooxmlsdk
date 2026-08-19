@@ -408,7 +408,8 @@ pub fn gen_open_xml_parts(part: &OpenXmlPart, gen_context: &GenContext) -> Token
               archive,
             ) {
               Ok(v) => v,
-              Err(crate::common::SdkError::ZipError(zip::result::ZipError::FileNotFound)) if relationship.target == "NULL" => #child_type::default(),
+              Err(crate::common::SdkError::ZipError(zip::result::ZipError::FileNotFound))
+                if relationship.target == "NULL" && !file_path_set.contains(&target_path) => #child_type::default(),
               Err(e) => return Err(e),
             };
 
@@ -444,7 +445,8 @@ pub fn gen_open_xml_parts(part: &OpenXmlPart, gen_context: &GenContext) -> Token
               archive,
             ) {
               Ok(v) => v,
-              Err(crate::common::SdkError::ZipError(zip::result::ZipError::FileNotFound)) if relationship.target == "NULL" => #child_type::default(),
+              Err(crate::common::SdkError::ZipError(zip::result::ZipError::FileNotFound))
+                if relationship.target == "NULL" && !file_path_set.contains(&target_path) => #child_type::default(),
               Err(e) => return Err(e),
             };
 
