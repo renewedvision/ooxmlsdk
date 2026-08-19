@@ -408,9 +408,7 @@ pub fn gen_open_xml_parts(part: &OpenXmlPart, gen_context: &GenContext) -> Token
               archive,
             ) {
               Ok(v) => v,
-              Err(_) if std::path::Path::new(&target_path)
-                .file_name()
-                .map_or(false, |f| f == "NULL") => #child_type::default(),
+              Err(_) if relationship.target == "NULL" => #child_type::default(),
               Err(e) => return Err(e),
             };
 
@@ -446,9 +444,7 @@ pub fn gen_open_xml_parts(part: &OpenXmlPart, gen_context: &GenContext) -> Token
               archive,
             ) {
               Ok(v) => v,
-              Err(_) if std::path::Path::new(&target_path)
-                .file_name()
-                .map_or(false, |f| f == "NULL") => #child_type::default(),
+              Err(_) if relationship.target == "NULL" => #child_type::default(),
               Err(e) => return Err(e),
             };
 
