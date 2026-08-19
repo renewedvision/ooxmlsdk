@@ -399,18 +399,17 @@ pub fn gen_open_xml_parts(part: &OpenXmlPart, gen_context: &GenContext) -> Token
               ),
             };
 
-            let #child_name_ident = match #child_type::new_from_archive(
-              &child_parent_path,
-              &target_path,
-              &relationship.id,
-              relationship.target_mode.as_ref(),
-              file_path_set,
-              archive,
-            ) {
-              Ok(v) => v,
-              Err(crate::common::SdkError::ZipError(zip::result::ZipError::FileNotFound))
-                if relationship.target == "NULL" && !file_path_set.contains(&target_path) => #child_type::default(),
-              Err(e) => return Err(e),
+            let #child_name_ident = if relationship.target == "NULL" && !file_path_set.contains(&target_path) {
+              #child_type::default()
+            } else {
+              #child_type::new_from_archive(
+                &child_parent_path,
+                &target_path,
+                &relationship.id,
+                relationship.target_mode.as_ref(),
+                file_path_set,
+                archive,
+              )?
             };
 
             #child_api_name_ident.push(#child_name_ident);
@@ -436,18 +435,17 @@ pub fn gen_open_xml_parts(part: &OpenXmlPart, gen_context: &GenContext) -> Token
               ),
             };
 
-            let __part = match #child_type::new_from_archive(
-              &child_parent_path,
-              &target_path,
-              &relationship.id,
-              relationship.target_mode.as_ref(),
-              file_path_set,
-              archive,
-            ) {
-              Ok(v) => v,
-              Err(crate::common::SdkError::ZipError(zip::result::ZipError::FileNotFound))
-                if relationship.target == "NULL" && !file_path_set.contains(&target_path) => #child_type::default(),
-              Err(e) => return Err(e),
+            let __part = if relationship.target == "NULL" && !file_path_set.contains(&target_path) {
+              #child_type::default()
+            } else {
+              #child_type::new_from_archive(
+                &child_parent_path,
+                &target_path,
+                &relationship.id,
+                relationship.target_mode.as_ref(),
+                file_path_set,
+                archive,
+              )?
             };
 
             #child_api_name_ident = Some(std::boxed::Box::new(__part));
