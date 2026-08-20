@@ -399,14 +399,18 @@ pub fn gen_open_xml_parts(part: &OpenXmlPart, gen_context: &GenContext) -> Token
               ),
             };
 
-            let #child_name_ident = #child_type::new_from_archive(
-              &child_parent_path,
-              &target_path,
-              &relationship.id,
-              relationship.target_mode.as_ref(),
-              file_path_set,
-              archive,
-            )?;
+            let #child_name_ident = if relationship.target == "NULL" && !file_path_set.contains(&target_path) {
+              #child_type::default()
+            } else {
+              #child_type::new_from_archive(
+                &child_parent_path,
+                &target_path,
+                &relationship.id,
+                relationship.target_mode.as_ref(),
+                file_path_set,
+                archive,
+              )?
+            };
 
             #child_api_name_ident.push(#child_name_ident);
           }
@@ -431,14 +435,20 @@ pub fn gen_open_xml_parts(part: &OpenXmlPart, gen_context: &GenContext) -> Token
               ),
             };
 
-            #child_api_name_ident = Some(std::boxed::Box::new(#child_type::new_from_archive(
-              &child_parent_path,
-              &target_path,
-              &relationship.id,
-              relationship.target_mode.as_ref(),
-              file_path_set,
-              archive,
-            )?));
+            let __part = if relationship.target == "NULL" && !file_path_set.contains(&target_path) {
+              #child_type::default()
+            } else {
+              #child_type::new_from_archive(
+                &child_parent_path,
+                &target_path,
+                &relationship.id,
+                relationship.target_mode.as_ref(),
+                file_path_set,
+                archive,
+              )?
+            };
+
+            #child_api_name_ident = Some(std::boxed::Box::new(__part));
           }
         })
         .unwrap(),
