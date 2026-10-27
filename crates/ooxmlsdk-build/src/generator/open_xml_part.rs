@@ -152,6 +152,14 @@ pub fn gen_open_xml_parts(part: &OpenXmlPart, gen_context: &GenContext) -> Token
     );
   }
 
+  let children_are_leaves = part.children.iter().all(|child| {
+    gen_context
+      .parts
+      .iter()
+      .find(|child_part| child_part.name == child.name)
+      .map_or(true, |child_part| child_part.children.is_empty())
+  });
+
   if !part.children.is_empty() {
     field_declaration_list.push(
       parse2(quote! {
@@ -160,12 +168,19 @@ pub fn gen_open_xml_parts(part: &OpenXmlPart, gen_context: &GenContext) -> Token
       .unwrap(),
     );
 
-    field_declaration_list.push(
+    // Parts whose children can link back to an ancestor (layout to master) still rely on the
+    // default folder, because a missing rels file there is what ends the recursion.
+    field_declaration_list.push(if children_are_leaves {
+      parse2(quote! {
+        let child_parent_path = path.rfind('/').map_or("", |index| &path[..=index]);
+      })
+      .unwrap()
+    } else {
       parse2(quote! {
         let child_parent_path = format!("{}{}", parent_path, #path_str);
       })
-      .unwrap(),
-    );
+      .unwrap()
+    });
 
     field_declaration_list.push(
       parse2(quote! {
@@ -652,12 +667,20 @@ pub fn gen_open_xml_parts(part: &OpenXmlPart, gen_context: &GenContext) -> Token
   }
 
   if !part.children.is_empty() {
-    writer_stmt_list.push(
+    writer_stmt_list.push(if children_are_leaves {
+      parse2(quote! {
+        let child_parent_path = self
+          .inner_path
+          .rfind('/')
+          .map_or("", |index| &self.inner_path[..=index]);
+      })
+      .unwrap()
+    } else {
       parse2(quote! {
         let child_parent_path = format!("{}{}", parent_path, #path_str);
       })
-      .unwrap(),
-    );
+      .unwrap()
+    });
 
     writer_stmt_list.push(
       parse2(quote! {
