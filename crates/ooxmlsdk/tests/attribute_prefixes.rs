@@ -51,6 +51,47 @@ fn reads_non_standard_prefixes() {
 }
 
 #[test]
+fn keeps_namespace_bindings_scoped_to_their_element() {
+  // sldMasterIdLst rebinds r, and its child restores it; sldIdLst must still see the outer r
+  let xml = presentation_xml("p", "r").replace(
+    r#"<p:sldMasterIdLst><p:sldMasterId id="2147483648" r:id="rId1"/></p:sldMasterIdLst>"#,
+    r#"<p:sldMasterIdLst xmlns:r="http://schemas.openxmlformats.org/drawingml/2006/main"><p:sldMasterId xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" id="2147483648" r:id="rId1"/></p:sldMasterIdLst>"#,
+  );
+
+  let presentation = Presentation::from_str(&xml).unwrap();
+
+  assert_eq!(slide_relationship_ids(&presentation), ["rId7", "rId8"]);
+}
+
+#[test]
+fn reads_bindings_declared_on_alternate_content() {
+  let xml = presentation_xml("p", "r").replace(
+    r#"<p:sldIdLst><p:sldId id="256" r:id="rId7"/><p:sldId id="257" r:id="rId8"/></p:sldIdLst>"#,
+    r#"<mc:AlternateContent xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"><mc:Choice Requires="p14" xmlns:p14="http://schemas.microsoft.com/office/powerpoint/2010/main" xmlns:q="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><p:sldIdLst><p:sldId id="256" q:id="rId7"/><p:sldId id="257" q:id="rId8"/></p:sldIdLst></mc:Choice></mc:AlternateContent>"#,
+  );
+
+  let presentation = Presentation::from_str(&xml).unwrap();
+
+  assert_eq!(slide_relationship_ids(&presentation), ["rId7", "rId8"]);
+  // Wrapper declarations are still written on the root when saving
+  let saved = presentation.to_xml().unwrap();
+  assert!(saved.contains(r#"xmlns:p14="http://schemas.microsoft.com/office/powerpoint/2010/main""#));
+}
+
+#[test]
+fn declares_standard_prefixes_when_saving() {
+  let presentation = Presentation::from_str(&presentation_xml("p", "ns1")).unwrap();
+
+  let saved = presentation.to_xml().unwrap();
+  assert!(saved.contains(r#"r:id="rId7""#));
+  assert!(saved
+    .contains(r#"xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships""#));
+
+  let reloaded = Presentation::from_str(&saved).unwrap();
+  assert_eq!(slide_relationship_ids(&reloaded), ["rId7", "rId8"]);
+}
+
+#[test]
 fn ignores_attributes_in_unknown_namespaces() {
   let xml = presentation_xml("p", "r").replace(
     r#"<p:sldId id="256" r:id="rId7"/>"#,

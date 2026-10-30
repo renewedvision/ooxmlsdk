@@ -124,6 +124,7 @@ pub fn gen_deserializers(schema: &OpenXmlSchema, gen_context: &GenContext) -> To
     let mut loop_declaration_list: Vec<Stmt> = vec![];
     let mut loop_children_stmt_opt: Option<Stmt> = None;
     let mut loop_match_arm_list: Vec<Arm> = vec![];
+    let mut stores_xmlns_map = false;
 
     let mut loop_children_match_list: Vec<Arm> = vec![];
     let mut loop_children_suffix_match_set: HashSet<String> = HashSet::new();
@@ -184,6 +185,25 @@ pub fn gen_deserializers(schema: &OpenXmlSchema, gen_context: &GenContext) -> To
           })
           .unwrap(),
         );
+
+        // The serializer declares only the stored namespaces on this element, so keep the ones
+        // its children and AlternateContent wrappers declared, plus the standard prefixes
+        field_declaration_list.push(
+          parse2(quote! {
+            #[allow(unused_mut)]
+            let mut xmlns_declarations = xmlns_map.clone();
+          })
+          .unwrap(),
+        );
+
+        field_unwrap_list.push(
+          parse2(quote! {
+            let xmlns_map = crate::common::with_standard_prefixes(xmlns_declarations);
+          })
+          .unwrap(),
+        );
+
+        stores_xmlns_map = true;
 
         field_ident_list.push(parse_str("xmlns").unwrap());
         field_ident_list.push(parse_str("xmlns_map").unwrap());
@@ -525,7 +545,7 @@ pub fn gen_deserializers(schema: &OpenXmlSchema, gen_context: &GenContext) -> To
       loop_match_arm_list.push(
         parse2(quote! {
           quick_xml::events::Event::Start(e) => {
-            e_opt = alternate_content_stack.on_start(e, xml_reader, &mut xmlns_map)?;
+            e_opt = alternate_content_stack.on_start(e, xml_reader, &xmlns_map)?;
           }
         })
         .unwrap(),
@@ -558,11 +578,25 @@ pub fn gen_deserializers(schema: &OpenXmlSchema, gen_context: &GenContext) -> To
         .unwrap(),
       );
 
+      let record_xmlns_stmt_opt: Option<Stmt> = if stores_xmlns_map {
+        Some(
+          parse2(quote! {
+            crate::common::record_namespaces(&mut xmlns_declarations, &child_xmlns_map);
+          })
+          .unwrap(),
+        )
+      } else {
+        None
+      };
+
       loop_children_stmt_opt = Some(
         parse2(quote! {
           if let Some(e) = e_opt {
-            crate::common::update_namespace_map(xml_reader, &e, &mut xmlns_map)?;
-            match (e.local_name().as_ref(), crate::common::get_element_namespace(&e, &xmlns_map)?) {
+            // A child's namespace declarations apply to it and its descendants, not to its siblings
+            let mut child_xmlns_map = alternate_content_stack.xmlns_map(&xmlns_map).clone();
+            crate::common::update_namespace_map(xml_reader, &e, &mut child_xmlns_map)?;
+            #record_xmlns_stmt_opt
+            match (e.local_name().as_ref(), crate::common::get_element_namespace(&e, &child_xmlns_map)?) {
               #( #loop_children_match_list )*
             }
           }
@@ -702,7 +736,7 @@ fn gen_one_sequence_match_arm(
       parse2(quote! {
         (#child_suffix_last_name_literal, #namespace_literal) => {
           #child_name_ident = Some(std::boxed::Box::new(
-            #child_variant_type::deserialize_inner(xml_reader, Some((e, e_empty)), xmlns_map.clone())?,
+            #child_variant_type::deserialize_inner(xml_reader, Some((e, e_empty)), child_xmlns_map)?,
           ));
         }
       })
@@ -711,7 +745,7 @@ fn gen_one_sequence_match_arm(
       parse2(quote! {
         (#child_suffix_last_name_literal, #namespace_literal) => {
           #child_name_ident.push(
-            #child_variant_type::deserialize_inner(xml_reader, Some((e, e_empty)), xmlns_map.clone())?,
+            #child_variant_type::deserialize_inner(xml_reader, Some((e, e_empty)), child_xmlns_map)?,
           );
         }
       })
@@ -721,7 +755,7 @@ fn gen_one_sequence_match_arm(
     parse2(quote! {
       (#child_suffix_last_name_literal, #namespace_literal) => {
         #child_name_ident = Some(std::boxed::Box::new(
-          #child_variant_type::deserialize_inner(xml_reader, Some((e, e_empty)), xmlns_map.clone())?,
+          #child_variant_type::deserialize_inner(xml_reader, Some((e, e_empty)), child_xmlns_map)?,
         ));
       }
     })
@@ -730,7 +764,7 @@ fn gen_one_sequence_match_arm(
     parse2(quote! {
       (#child_suffix_last_name_literal, #namespace_literal) => {
         #child_name_ident.push(
-          #child_variant_type::deserialize_inner(xml_reader, Some((e, e_empty)), xmlns_map.clone())?,
+          #child_variant_type::deserialize_inner(xml_reader, Some((e, e_empty)), child_xmlns_map)?,
         );
       }
     })
@@ -774,7 +808,7 @@ fn gen_child_match_arm(
   parse2(quote! {
     (#child_suffix_last_name_literal, #namespace_literal) => {
       children.push(#child_choice_enum_ident::#child_variant_name_ident(std::boxed::Box::new(
-        #child_variant_type::deserialize_inner(xml_reader, Some((e, e_empty)), xmlns_map.clone())?,
+        #child_variant_type::deserialize_inner(xml_reader, Some((e, e_empty)), child_xmlns_map)?,
       )));
     }
   })

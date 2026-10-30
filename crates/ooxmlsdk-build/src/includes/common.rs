@@ -289,6 +289,34 @@ pub(crate) fn standard_attr_name<'k>(
   }
 }
 
+#[allow(dead_code)]
+pub(crate) fn record_namespaces(
+  xmlns_declarations: &mut HashMap<String, String>,
+  xmlns_map: &HashMap<String, String>,
+) {
+  for (prefix, uri) in xmlns_map {
+    if xmlns_declarations.get(prefix) != Some(uri) {
+      xmlns_declarations.insert(prefix.clone(), uri.clone());
+    }
+  }
+}
+
+// The serializer writes standard prefixes, so declare them alongside any non-standard ones
+#[allow(dead_code)]
+pub(crate) fn with_standard_prefixes(
+  mut xmlns_map: HashMap<String, String>,
+) -> HashMap<String, String> {
+  let missing: Vec<(String, String)> = xmlns_map
+    .values()
+    .filter_map(|uri| {
+      let standard_prefix = defs::standard_prefix(uri)?;
+      (!xmlns_map.contains_key(standard_prefix)).then(|| (standard_prefix.to_string(), uri.clone()))
+    })
+    .collect();
+  xmlns_map.extend(missing);
+  xmlns_map
+}
+
 pub(crate) fn get_element_namespace<'a, 'b>(
   e: &quick_xml::events::BytesStart<'a>,
   xmlns_map: &'b HashMap<String, String>,
