@@ -468,7 +468,7 @@ pub fn gen_deserializers(schema: &OpenXmlSchema, gen_context: &GenContext) -> To
           for attr in e.attributes().with_checks(false) {
             let attr = attr?;
 
-            match attr.key.as_ref() {
+            match crate::common::standard_attr_name(attr.key.as_ref(), &xmlns_map).as_ref() {
               #( #attr_match_list )*
               b"xmlns" => {
                 xmlns = Some(attr.decode_and_unescape_value(xml_reader.decoder())?.into_owned());
@@ -489,7 +489,7 @@ pub fn gen_deserializers(schema: &OpenXmlSchema, gen_context: &GenContext) -> To
             let attr = attr?;
 
             #[allow(clippy::single_match)]
-            match attr.key.as_ref() {
+            match crate::common::standard_attr_name(attr.key.as_ref(), &xmlns_map).as_ref() {
               #( #attr_match_list )*
               _ => {}
             }
