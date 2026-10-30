@@ -164,10 +164,29 @@ pub(crate) fn write_schemas(gen_context: &GenContext, out_dir_path: &Path) {
     .filter(|ns| generator::context::check_office_version(&ns.version))
     .map(|ns| syn::LitStr::new(&ns.prefix, Span::call_site()))
     .collect();
+  let (standard_prefix_uris, standard_prefixes): (Vec<syn::LitStr>, Vec<syn::LitStr>) = gen_context
+    .namespaces
+    .iter()
+    .filter(|ns| !ns.prefix.is_empty() && !ns.uri.is_empty())
+    .map(|ns| {
+      (
+        syn::LitStr::new(&ns.uri, Span::call_site()),
+        syn::LitStr::new(&ns.prefix, Span::call_site()),
+      )
+    })
+    .unzip();
   let syntax_tree = syn::parse2(quote! {
     pub const SUPPORTED_NAMESPACES: &[&str] = &[
       #(#supported_namespaces),*
     ];
+
+    // The prefix the generated deserializers expect for each namespace URI
+    pub fn standard_prefix(uri: &str) -> Option<&'static str> {
+      match uri {
+        #( #standard_prefix_uris => Some(#standard_prefixes), )*
+        _ => None,
+      }
+    }
   })
   .unwrap();
   let formatted = prettyplease::unparse(&syntax_tree);

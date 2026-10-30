@@ -257,6 +257,69 @@ where
   Ok(())
 }
 
+// Attribute arms match qualified names like `r:id`, so rewrite a prefix bound to a known
+// namespace (e.g. `ns1:id` where ns1 is the relationships namespace) to its standard prefix.
+#[allow(dead_code)]
+pub(crate) fn standard_attr_name<'k>(
+  key: &'k [u8],
+  xmlns_map: &HashMap<String, String>,
+) -> std::borrow::Cow<'k, [u8]> {
+  let Some(colon) = key.iter().position(|b| *b == b':') else {
+    return std::borrow::Cow::Borrowed(key);
+  };
+  let (prefix, local_name) = (&key[..colon], &key[colon + 1..]);
+  if prefix == b"xmlns" {
+    return std::borrow::Cow::Borrowed(key);
+  }
+
+  let standard_prefix = std::str::from_utf8(prefix)
+    .ok()
+    .and_then(|prefix| xmlns_map.get(prefix))
+    .and_then(|uri| defs::standard_prefix(uri));
+
+  match standard_prefix {
+    Some(standard_prefix) if standard_prefix.as_bytes() != prefix => {
+      let mut name = Vec::with_capacity(standard_prefix.len() + 1 + local_name.len());
+      name.extend_from_slice(standard_prefix.as_bytes());
+      name.push(b':');
+      name.extend_from_slice(local_name);
+      std::borrow::Cow::Owned(name)
+    }
+    _ => std::borrow::Cow::Borrowed(key),
+  }
+}
+
+#[allow(dead_code)]
+pub(crate) fn record_namespaces(
+  xmlns_declarations: &mut HashMap<String, String>,
+  xmlns_map: &HashMap<String, String>,
+) {
+  for (prefix, uri) in xmlns_map {
+    if xmlns_declarations.get(prefix) != Some(uri) {
+      xmlns_declarations.insert(prefix.clone(), uri.clone());
+    }
+  }
+}
+
+// The serializer writes standard prefixes, so bind each known namespace to its standard prefix
+// alongside any non-standard one. This replaces a standard prefix the file used for another
+// namespace, since nothing is written with that prefix in its non-standard meaning.
+#[allow(dead_code)]
+pub(crate) fn with_standard_prefixes(
+  mut xmlns_map: HashMap<String, String>,
+) -> HashMap<String, String> {
+  let standard: Vec<(String, String)> = xmlns_map
+    .values()
+    .filter_map(|uri| {
+      let standard_prefix = defs::standard_prefix(uri)?;
+      (xmlns_map.get(standard_prefix) != Some(uri))
+        .then(|| (standard_prefix.to_string(), uri.clone()))
+    })
+    .collect();
+  xmlns_map.extend(standard);
+  xmlns_map
+}
+
 pub(crate) fn get_element_namespace<'a, 'b>(
   e: &quick_xml::events::BytesStart<'a>,
   xmlns_map: &'b HashMap<String, String>,
