@@ -301,19 +301,22 @@ pub(crate) fn record_namespaces(
   }
 }
 
-// The serializer writes standard prefixes, so declare them alongside any non-standard ones
+// The serializer writes standard prefixes, so bind each known namespace to its standard prefix
+// alongside any non-standard one. This replaces a standard prefix the file used for another
+// namespace, since nothing is written with that prefix in its non-standard meaning.
 #[allow(dead_code)]
 pub(crate) fn with_standard_prefixes(
   mut xmlns_map: HashMap<String, String>,
 ) -> HashMap<String, String> {
-  let missing: Vec<(String, String)> = xmlns_map
+  let standard: Vec<(String, String)> = xmlns_map
     .values()
     .filter_map(|uri| {
       let standard_prefix = defs::standard_prefix(uri)?;
-      (!xmlns_map.contains_key(standard_prefix)).then(|| (standard_prefix.to_string(), uri.clone()))
+      (xmlns_map.get(standard_prefix) != Some(uri))
+        .then(|| (standard_prefix.to_string(), uri.clone()))
     })
     .collect();
-  xmlns_map.extend(missing);
+  xmlns_map.extend(standard);
   xmlns_map
 }
 

@@ -92,6 +92,25 @@ fn declares_standard_prefixes_when_saving() {
 }
 
 #[test]
+fn rebinds_occupied_standard_prefix_when_saving() {
+  // r is taken by DrawingML, and q is the relationships namespace
+  let xml = presentation_xml("p", "q").replace(
+    "xmlns:q=",
+    r#"xmlns:r="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:q="#,
+  );
+  let presentation = Presentation::from_str(&xml).unwrap();
+  assert_eq!(slide_relationship_ids(&presentation), ["rId7", "rId8"]);
+
+  let saved = presentation.to_xml().unwrap();
+  assert!(saved
+    .contains(r#"xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships""#));
+  assert!(saved.contains(r#"xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main""#));
+
+  let reloaded = Presentation::from_str(&saved).unwrap();
+  assert_eq!(slide_relationship_ids(&reloaded), ["rId7", "rId8"]);
+}
+
+#[test]
 fn ignores_attributes_in_unknown_namespaces() {
   let xml = presentation_xml("p", "r").replace(
     r#"<p:sldId id="256" r:id="rId7"/>"#,
