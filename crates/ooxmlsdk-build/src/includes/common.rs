@@ -237,10 +237,11 @@ pub(crate) fn update_namespace_map<'a, R>(
   xml_reader: &R,
   e: &quick_xml::events::BytesStart<'a>,
   xmlns_map: &mut HashMap<String, String>,
-) -> Result<(), SdkError>
+) -> Result<bool, SdkError>
 where
   R: XmlReader<'a>,
 {
+  let mut declared = false;
   for attr in e.attributes().with_checks(false) {
     let attr = attr?;
     if let Some(namespace) = attr.key.as_namespace_binding() {
@@ -252,9 +253,10 @@ where
         PrefixDeclaration::Default => "".into(),
       };
       xmlns_map.insert(key.to_string(), value);
+      declared = true;
     }
   }
-  Ok(())
+  Ok(declared)
 }
 
 // Attribute arms match qualified names like `r:id`, so rewrite a prefix bound to a known
@@ -289,14 +291,17 @@ pub(crate) fn standard_attr_name<'k>(
   }
 }
 
+// Keep the prefixes a child (or its AlternateContent wrapper) declared so the parent can declare
+// them when saving. A prefix the parent or an earlier child already bound keeps that binding.
 #[allow(dead_code)]
 pub(crate) fn record_namespaces(
-  xmlns_declarations: &mut HashMap<String, String>,
+  child_xmlns_declarations: &mut HashMap<String, String>,
   xmlns_map: &HashMap<String, String>,
+  child_xmlns_map: &HashMap<String, String>,
 ) {
-  for (prefix, uri) in xmlns_map {
-    if xmlns_declarations.get(prefix) != Some(uri) {
-      xmlns_declarations.insert(prefix.clone(), uri.clone());
+  for (prefix, uri) in child_xmlns_map {
+    if !xmlns_map.contains_key(prefix) && !child_xmlns_declarations.contains_key(prefix) {
+      child_xmlns_declarations.insert(prefix.clone(), uri.clone());
     }
   }
 }
@@ -307,7 +312,12 @@ pub(crate) fn record_namespaces(
 #[allow(dead_code)]
 pub(crate) fn with_standard_prefixes(
   mut xmlns_map: HashMap<String, String>,
+  child_xmlns_declarations: HashMap<String, String>,
 ) -> HashMap<String, String> {
+  for (prefix, uri) in child_xmlns_declarations {
+    xmlns_map.entry(prefix).or_insert(uri);
+  }
+
   let standard: Vec<(String, String)> = xmlns_map
     .values()
     .filter_map(|uri| {

@@ -67,7 +67,8 @@ fn keeps_namespace_bindings_scoped_to_their_element() {
 fn reads_bindings_declared_on_alternate_content() {
   let xml = presentation_xml("p", "r").replace(
     r#"<p:sldIdLst><p:sldId id="256" r:id="rId7"/><p:sldId id="257" r:id="rId8"/></p:sldIdLst>"#,
-    r#"<mc:AlternateContent xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"><mc:Choice Requires="p14" xmlns:p14="http://schemas.microsoft.com/office/powerpoint/2010/main" xmlns:q="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><p:sldIdLst><p:sldId id="256" q:id="rId7"/><p:sldId id="257" q:id="rId8"/></p:sldIdLst></mc:Choice></mc:AlternateContent>"#,
+    // Requires an Office 2007 namespace so the Choice is taken under default features
+    r#"<mc:AlternateContent xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"><mc:Choice Requires="a" xmlns:x="urn:example" xmlns:q="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><p:sldIdLst><p:sldId id="256" q:id="rId7"/><p:sldId id="257" q:id="rId8"/></p:sldIdLst></mc:Choice></mc:AlternateContent>"#,
   );
 
   let presentation = Presentation::from_str(&xml).unwrap();
@@ -75,7 +76,7 @@ fn reads_bindings_declared_on_alternate_content() {
   assert_eq!(slide_relationship_ids(&presentation), ["rId7", "rId8"]);
   // Wrapper declarations are still written on the root when saving
   let saved = presentation.to_xml().unwrap();
-  assert!(saved.contains(r#"xmlns:p14="http://schemas.microsoft.com/office/powerpoint/2010/main""#));
+  assert!(saved.contains(r#"xmlns:x="urn:example""#));
 }
 
 #[test]
@@ -105,6 +106,22 @@ fn rebinds_occupied_standard_prefix_when_saving() {
   assert!(saved
     .contains(r#"xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships""#));
   assert!(saved.contains(r#"xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main""#));
+
+  let reloaded = Presentation::from_str(&saved).unwrap();
+  assert_eq!(slide_relationship_ids(&reloaded), ["rId7", "rId8"]);
+}
+
+#[test]
+fn keeps_root_binding_when_a_child_rebinds_its_prefix() {
+  let xml = presentation_xml("p", "r").replace(
+    r#"<p:notesSz cx="#,
+    r#"<p:notesSz xmlns:r="http://schemas.openxmlformats.org/drawingml/2006/main" cx="#,
+  );
+  let presentation = Presentation::from_str(&xml).unwrap();
+
+  let saved = presentation.to_xml().unwrap();
+  assert!(saved
+    .contains(r#"xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships""#));
 
   let reloaded = Presentation::from_str(&saved).unwrap();
   assert_eq!(slide_relationship_ids(&reloaded), ["rId7", "rId8"]);

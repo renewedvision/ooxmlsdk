@@ -186,19 +186,21 @@ pub fn gen_deserializers(schema: &OpenXmlSchema, gen_context: &GenContext) -> To
           .unwrap(),
         );
 
-        // The serializer declares only the stored namespaces on this element, so keep the ones
-        // its children and AlternateContent wrappers declared, plus the standard prefixes
+        // The serializer declares only the stored namespaces on this element, so also keep the
+        // prefixes its children and AlternateContent wrappers declared, plus the standard prefixes
         field_declaration_list.push(
           parse2(quote! {
             #[allow(unused_mut)]
-            let mut xmlns_declarations = xmlns_map.clone();
+            let mut child_xmlns_declarations: std::collections::HashMap<String, String> =
+              std::collections::HashMap::new();
           })
           .unwrap(),
         );
 
         field_unwrap_list.push(
           parse2(quote! {
-            let xmlns_map = crate::common::with_standard_prefixes(xmlns_declarations);
+            let xmlns_map =
+              crate::common::with_standard_prefixes(xmlns_map, child_xmlns_declarations);
           })
           .unwrap(),
         );
@@ -578,15 +580,25 @@ pub fn gen_deserializers(schema: &OpenXmlSchema, gen_context: &GenContext) -> To
         .unwrap(),
       );
 
-      let record_xmlns_stmt_opt: Option<Stmt> = if stores_xmlns_map {
-        Some(
-          parse2(quote! {
-            crate::common::record_namespaces(&mut xmlns_declarations, &child_xmlns_map);
-          })
-          .unwrap(),
-        )
+      // Only children that declare something, or sit inside a wrapper that did, add bindings
+      let update_xmlns_stmts: Vec<Stmt> = if stores_xmlns_map {
+        parse2::<syn::Block>(quote! {{
+          let declared = crate::common::update_namespace_map(xml_reader, &e, &mut child_xmlns_map)?;
+          if declared || alternate_content_stack.in_scope() {
+            crate::common::record_namespaces(
+              &mut child_xmlns_declarations,
+              &xmlns_map,
+              &child_xmlns_map,
+            );
+          }
+        }})
+        .unwrap()
+        .stmts
       } else {
-        None
+        vec![parse2(quote! {
+          crate::common::update_namespace_map(xml_reader, &e, &mut child_xmlns_map)?;
+        })
+        .unwrap()]
       };
 
       loop_children_stmt_opt = Some(
@@ -594,8 +606,7 @@ pub fn gen_deserializers(schema: &OpenXmlSchema, gen_context: &GenContext) -> To
           if let Some(e) = e_opt {
             // A child's namespace declarations apply to it and its descendants, not to its siblings
             let mut child_xmlns_map = alternate_content_stack.xmlns_map(&xmlns_map).clone();
-            crate::common::update_namespace_map(xml_reader, &e, &mut child_xmlns_map)?;
-            #record_xmlns_stmt_opt
+            #( #update_xmlns_stmts )*
             match (e.local_name().as_ref(), crate::common::get_element_namespace(&e, &child_xmlns_map)?) {
               #( #loop_children_match_list )*
             }

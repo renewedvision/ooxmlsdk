@@ -20,6 +20,11 @@ impl AlternateContentStack {
     self.xmlns_scopes.last().unwrap_or(xmlns_map)
   }
 
+  // Whether the next child is inside an AlternateContent, Choice or Fallback element
+  pub fn in_scope(&self) -> bool {
+    !self.xmlns_scopes.is_empty()
+  }
+
   // Handle an element starting tag
   pub fn on_start<'a, R>(
     &mut self,
