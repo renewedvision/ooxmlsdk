@@ -199,8 +199,7 @@ pub fn gen_deserializers(schema: &OpenXmlSchema, gen_context: &GenContext) -> To
 
         field_unwrap_list.push(
           parse2(quote! {
-            let xmlns_map =
-              crate::common::with_standard_prefixes(xmlns_map, child_xmlns_declarations);
+            let xmlns_map = crate::common::with_child_namespaces(xmlns_map, child_xmlns_declarations);
           })
           .unwrap(),
         );

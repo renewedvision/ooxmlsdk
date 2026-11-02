@@ -432,7 +432,7 @@ pub fn gen_serializer(schema: &OpenXmlSchema, gen_context: &GenContext) -> Token
 
       xmlns_attr_writer_list.push(
         parse2(quote! {
-          for (k, v) in &self.xmlns_map {
+          for (k, v) in crate::common::with_standard_prefixes(&self.xmlns_map).iter() {
             writer.write_str(" xmlns:")?;
             writer.write_str(k)?;
             writer.write_str("=\"")?;

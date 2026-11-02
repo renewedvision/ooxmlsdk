@@ -306,18 +306,24 @@ pub(crate) fn record_namespaces(
   }
 }
 
-// The serializer writes standard prefixes, so bind each known namespace to its standard prefix
-// alongside any non-standard one. This replaces a standard prefix the file used for another
-// namespace, since nothing is written with that prefix in its non-standard meaning.
 #[allow(dead_code)]
-pub(crate) fn with_standard_prefixes(
+pub(crate) fn with_child_namespaces(
   mut xmlns_map: HashMap<String, String>,
   child_xmlns_declarations: HashMap<String, String>,
 ) -> HashMap<String, String> {
   for (prefix, uri) in child_xmlns_declarations {
     xmlns_map.entry(prefix).or_insert(uri);
   }
+  xmlns_map
+}
 
+// The serializer writes standard prefixes, so bind each known namespace to its standard prefix
+// alongside any non-standard one. This replaces a standard prefix the file used for another
+// namespace, since nothing is written with that prefix in its non-standard meaning.
+#[allow(dead_code)]
+pub(crate) fn with_standard_prefixes(
+  xmlns_map: &HashMap<String, String>,
+) -> std::borrow::Cow<'_, HashMap<String, String>> {
   let standard: Vec<(String, String)> = xmlns_map
     .values()
     .filter_map(|uri| {
@@ -326,8 +332,12 @@ pub(crate) fn with_standard_prefixes(
         .then(|| (standard_prefix.to_string(), uri.clone()))
     })
     .collect();
+  if standard.is_empty() {
+    return std::borrow::Cow::Borrowed(xmlns_map);
+  }
+  let mut xmlns_map = xmlns_map.clone();
   xmlns_map.extend(standard);
-  xmlns_map
+  std::borrow::Cow::Owned(xmlns_map)
 }
 
 pub(crate) fn get_element_namespace<'a, 'b>(
